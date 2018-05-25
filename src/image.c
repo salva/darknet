@@ -236,23 +236,68 @@ image **load_alphabet()
     return alphabets;
 }
 
+struct ix_prob {
+    int ix;
+    float prob;
+};
+
+static int cmp_ix_prob(const struct ix_prob *a, const struct ix_prob *b)
+{
+    if (a->prob < b->prob) return -1;
+    if (a->prob > b->prob) return 1;
+    return 0;
+}
+
 void draw_detections(image im, detection *dets, int num, float thresh, char **names, image **alphabet, int classes)
 {
-    int i,j;
+    int i,j, num_dets = 0;
+    struct ix_prob *ix_prob_dets = (struct ix_prob *)malloc(sizeof(struct ix_prob) * num);
+    struct ix_prob *ix_prob_classes = (struct ix_prob *)malloc(sizeof(struct ix_prob) * classes);
 
-    for(i = 0; i < num; ++i){
+    for (i = 0; i < num; ++i) {
+	float prob = 0;
+	for (j = 0; j < classes; j++) {
+	    if (dets[i].prob[j] > prob)
+		prob = dets[i].prob[j];
+	}
+	if (prob > thresh) {
+	    ix_prob_dets[num_dets].ix = i;
+	    ix_prob_dets[num_dets].prob = prob;
+	    num_dets++;
+	}
+    }
+
+    qsort((void *)ix_prob_dets, num_dets, sizeof(struct ix_prob),
+	  (int (*)(const void *, const void *))&cmp_ix_prob);
+
+    for(i = 0; i < num_dets; ++i){
         char labelstr[4096] = {0};
         int class = -1;
-        for(j = 0; j < classes; ++j){
-            if (dets[i].prob[j] > thresh){
+	detection *det = dets + ix_prob_dets[i].ix;
+
+	int num_classes = 0;
+	for (j = 0; j < classes; ++j) {
+	    if (det->prob[j] > thresh) {
+		ix_prob_classes[num_classes].prob = -det->prob[j];
+		ix_prob_classes[num_classes].ix = j;
+		num_classes++;
+	    }
+	}
+
+	qsort((void *)ix_prob_classes, num_classes, sizeof(struct ix_prob),
+	      (int (*)(const void *, const void *))&cmp_ix_prob);
+
+        for(j = 0; j < num_classes; ++j){
+	    int ix = ix_prob_classes[j].ix;
+            if (det->prob[ix] > thresh){
                 if (class < 0) {
-                    strcat(labelstr, names[j]);
-                    class = j;
+                    strcat(labelstr, names[ix]);
+                    class = ix;
                 } else {
                     strcat(labelstr, ", ");
-                    strcat(labelstr, names[j]);
+                    strcat(labelstr, names[ix]);
                 }
-                printf("%s: %.0f%%\n", names[j], dets[i].prob[j]*100);
+                printf("%s: %.0f%%\n", names[ix], det->prob[ix]*100);
             }
         }
         if(class >= 0){
@@ -277,7 +322,7 @@ void draw_detections(image im, detection *dets, int num, float thresh, char **na
             rgb[0] = red;
             rgb[1] = green;
             rgb[2] = blue;
-            box b = dets[i].bbox;
+            box b = det->bbox;
             //printf("%f %f %f %f\n", b.x, b.y, b.w, b.h);
 
             int left  = (b.x-b.w/2.)*im.w;
@@ -296,8 +341,8 @@ void draw_detections(image im, detection *dets, int num, float thresh, char **na
                 draw_label(im, top + width, left, label, rgb);
                 free_image(label);
             }
-            if (dets[i].mask){
-                image mask = float_to_image(14, 14, 1, dets[i].mask);
+            if (det->mask){
+                image mask = float_to_image(14, 14, 1, det->mask);
                 image resized_mask = resize_image(mask, b.w*im.w, b.h*im.h);
                 image tmask = threshold_image(resized_mask, .5);
                 embed_image(tmask, im, left, top);
@@ -307,6 +352,9 @@ void draw_detections(image im, detection *dets, int num, float thresh, char **na
             }
         }
     }
+
+    free(ix_prob_dets);
+    free(ix_prob_classes);
 }
 
 void transpose_image(image im)
