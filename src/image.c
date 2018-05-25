@@ -248,7 +248,7 @@ static int cmp_ix_prob(const struct ix_prob *a, const struct ix_prob *b)
     return 0;
 }
 
-void draw_detections(image im, detection *dets, int num, float thresh, char **names, image **alphabet, int classes)
+void draw_detections(image im, detection *dets, int num, float thresh, char **names, image **alphabet, int classes, int tag_score)
 {
     int i,j, num_dets = 0;
     struct ix_prob *ix_prob_dets = (struct ix_prob *)malloc(sizeof(struct ix_prob) * num);
@@ -291,12 +291,20 @@ void draw_detections(image im, detection *dets, int num, float thresh, char **na
 	    int ix = ix_prob_classes[j].ix;
             if (det->prob[ix] > thresh){
                 if (class < 0) {
-                    strcat(labelstr, names[ix]);
-                    class = ix;
-                } else {
+		    class = ix;
+		}
+		else {
                     strcat(labelstr, ", ");
-                    strcat(labelstr, names[ix]);
-                }
+		}
+		if (tag_score) {
+		    off_t off = strlen(labelstr);
+		    int score = (int)(det->prob[ix]*100);
+		    sprintf(labelstr + off, "%d:%s", score, names[ix]);
+		}
+		else {
+		    strcat(labelstr, names[ix]);
+		}
+
                 printf("%s: %.0f%%\n", names[ix], det->prob[ix]*100);
             }
         }
