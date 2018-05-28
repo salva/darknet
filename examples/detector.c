@@ -559,8 +559,43 @@ void validate_detector_recall(char *cfgfile, char *weightfile)
     }
 }
 
+static void save_detections_csv(char *outfile, detection *dets, int num, float thresh, char **names, int classes,
+                                int width, int height)
+{
+    char path[PATH_MAX + 1];
+    FILE *fp;
 
-void test_detector(char *datacfg, char *cfgfile, char *weightfile, char **filenames, int count, float thresh, float hier_thresh, char *outpath, int fullscreen, int tag_score)
+    snprintf(path, PATH_MAX, "%s.csv", outfile);
+    path[PATH_MAX] = 0;
+
+    fp = fopen(path, "w");
+    if (fp) {
+        int i, j;
+        for (i = 0; i < num; ++i) {
+            detection *det = dets + i;
+            box b = det->bbox;
+            int left  = (b.x-b.w/2.)*width;
+            int right = (b.x+b.w/2.)*width;
+            int top   = (b.y-b.h/2.)*height;
+            int bot   = (b.y+b.h/2.)*height;
+            for (j = 0; j < classes; j++) {
+                float prob = det->prob[j];
+                if (prob > thresh) {
+                    char *name = names[j];
+                    if (name[0] != '-') {
+                        fprintf(fp, "%s,%d,%d,%d,%d,%1.3f\n",
+                                names[j], left, right, top, bot, prob);
+                    }
+                }
+            }
+        }
+        fclose(fp);
+    }
+}
+
+
+void test_detector(char *datacfg, char *cfgfile, char *weightfile, char **filenames, int count, float thresh, float hier_thresh,
+                   char *outpath, int fullscreen, int tag_score, int csv)
 {
     list *options = read_data_cfg(datacfg);
     char *name_list = option_find_str(options, "names", "data/names.list");
@@ -606,7 +641,6 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char **filena
         //if (nms) do_nms_obj(boxes, probs, l.w*l.h*l.n, l.classes, nms);
         if (nms) do_nms_sort(dets, nboxes, l.classes, nms);
         draw_detections(im, dets, nboxes, thresh, names, alphabet, l.classes, tag_score);
-        free_detections(dets, nboxes);
         strncpy(outfile, (outpath ? outpath : "predictions"), PATH_MAX);
         outfile[PATH_MAX] = 0;
         if (count != 1) {
@@ -642,6 +676,12 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char **filena
             cvDestroyAllWindows();
 #endif
         }
+
+        if (csv) {
+            save_detections_csv(outfile, dets, nboxes, thresh, names, l.classes, im.w, im.h);
+        }
+
+        free_detections(dets, nboxes);
 
         free_image(im);
         free_image(sized);
@@ -857,6 +897,8 @@ void run_detector(int argc, char **argv)
     int fps = find_int_arg(argc, argv, "-fps", 0);
 
     int tag_score = find_arg(argc, argv, "-tag-score");
+    int csv = find_arg(argc, argv, "-csv");
+
     //int class = find_int_arg(argc, argv, "-class", 0);
 
     // find_*_arg functions, remove entries from argv but don't adjust
@@ -870,7 +912,8 @@ void run_detector(int argc, char **argv)
     char **filenames = (argc > 6) ? argv + 6 : 0;
     char *filename = (filenames != NULL) ? filenames[0] : 0;
 
-    if(0==strcmp(argv[2], "test")) test_detector(datacfg, cfg, weights, filenames, filecount, thresh, hier_thresh, outfile, fullscreen, tag_score);
+    if(0==strcmp(argv[2], "test")) test_detector(datacfg, cfg, weights, filenames, filecount, thresh, hier_thresh, outfile,
+                                                 fullscreen, tag_score, csv);
     else if(0==strcmp(argv[2], "train")) train_detector(datacfg, cfg, weights, gpus, ngpus, clear);
     else if(0==strcmp(argv[2], "valid")) validate_detector(datacfg, cfg, weights, outfile);
     else if(0==strcmp(argv[2], "valid2")) validate_detector_flip(datacfg, cfg, weights, outfile);
