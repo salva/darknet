@@ -257,7 +257,7 @@ void draw_detections(image im, detection *dets, int num, float thresh, char **na
     for (i = 0; i < num; ++i) {
 	float prob = 0;
 	for (j = 0; j < classes; j++) {
-	    if (dets[i].prob[j] > prob)
+	    if (names[j][0] != '-' && dets[i].prob[j] > prob)
 		prob = dets[i].prob[j];
 	}
 	if (prob > thresh) {
@@ -277,7 +277,7 @@ void draw_detections(image im, detection *dets, int num, float thresh, char **na
 
 	int num_classes = 0;
 	for (j = 0; j < classes; ++j) {
-	    if (det->prob[j] > thresh) {
+	    if (names[j][0] != '-' && det->prob[j] > thresh) {
 		ix_prob_classes[num_classes].prob = -det->prob[j];
 		ix_prob_classes[num_classes].ix = j;
 		num_classes++;
