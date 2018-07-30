@@ -673,6 +673,15 @@ image ipl_to_image(IplImage* src)
     return out;
 }
 
+void dump_image(image im) {
+    int i;
+    FILE *fh = fopen("/tmp/img.csv", "w");
+    for(i = 0; i < im.w * im.h; ++i) {
+        fprintf(fh, "%f, %f, %f\n", im.data[i], im.data[i + im.w * im.h], im.data[i + im.w * im.h * 2]);
+    }
+    fclose(fh);
+}
+
 image load_image_cv(char *filename, int channels)
 {
     IplImage* src = 0;
@@ -696,6 +705,7 @@ image load_image_cv(char *filename, int channels)
     image out = ipl_to_image(src);
     cvReleaseImage(&src);
     rgbgr_image(out);
+    dump_image(out);
     return out;
 }
 
